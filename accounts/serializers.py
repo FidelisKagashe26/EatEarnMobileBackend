@@ -10,6 +10,8 @@ class UserSerializer(serializers.ModelSerializer):
     """Serialises a user using the camelCase shape the mobile app expects."""
 
     id = serializers.CharField(read_only=True)
+    # Role is fixed at registration — never changeable through profile updates.
+    role = serializers.CharField(read_only=True)
     fullName = serializers.CharField(source="full_name")
     vendorId = serializers.SerializerMethodField()
     studentId = serializers.CharField(source="student_id", required=False, allow_blank=True)

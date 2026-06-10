@@ -1,8 +1,13 @@
+import os
 from math import asin, cos, radians, sin, sqrt
+from uuid import uuid4
 
+from django.conf import settings
+from django.core.files.storage import default_storage
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
 from .models import MenuItem, Vendor
@@ -17,9 +22,31 @@ def haversine_km(lat1, lon1, lat2, lon2):
     return 2 * r * asin(sqrt(a))
 
 
-class VendorViewSet(viewsets.ReadOnlyModelViewSet):
+class VendorViewSet(viewsets.ModelViewSet):
     queryset = Vendor.objects.all()
     serializer_class = VendorSerializer
+    http_method_names = ["get", "patch", "head", "options"]
+
+    # A vendor manager may self-update only these fields of their own
+    # cafeteria; everything else changes through the admin.
+    MANAGER_EDITABLE = {"location"}
+
+    def update(self, request, *args, **kwargs):
+        vendor = self.get_object()
+        user = request.user
+        if getattr(user, "role", None) == "admin":
+            data = request.data
+        elif getattr(user, "role", None) == "vendor" and str(user.vendor_id) == str(vendor.pk):
+            data = {key: value for key, value in request.data.items() if key in self.MANAGER_EDITABLE}
+            if not data:
+                raise PermissionDenied("Only the cafeteria location can be changed here — ask an admin for other fields.")
+        else:
+            raise PermissionDenied("You can only update your own cafeteria.")
+
+        serializer = self.get_serializer(vendor, data=data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
     @action(detail=True, methods=["get"])
     def menu(self, request, pk=None):
@@ -91,3 +118,28 @@ class MenuItemViewSet(viewsets.ModelViewSet):
         item.is_available = not item.is_available
         item.save(update_fields=["is_available"])
         return Response(self.get_serializer(item).data)
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="upload-image",
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def upload_image(self, request):
+        """Vendors upload a food photo; returns the public URL to store on the item."""
+        if getattr(request.user, "role", None) not in ("vendor", "admin"):
+            raise PermissionDenied("Only vendors can upload food photos.")
+
+        file = request.FILES.get("image")
+        if not file:
+            return Response({"detail": "Attach the photo in an 'image' field."}, status=status.HTTP_400_BAD_REQUEST)
+        if file.size > 5 * 1024 * 1024:
+            return Response({"detail": "The image must be smaller than 5MB."}, status=status.HTTP_400_BAD_REQUEST)
+
+        ext = os.path.splitext(file.name or "")[1].lower() or ".jpg"
+        stored = default_storage.save(f"menu/{uuid4().hex}{ext}", file)
+        media_url = settings.MEDIA_URL if settings.MEDIA_URL.startswith("/") else f"/{settings.MEDIA_URL}"
+        return Response(
+            {"url": request.build_absolute_uri(f"{media_url}{stored}")},
+            status=status.HTTP_201_CREATED,
+        )

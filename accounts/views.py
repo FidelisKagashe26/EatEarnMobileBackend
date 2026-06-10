@@ -156,14 +156,45 @@ class UsersListView(APIView):
         return Response(UserSerializer(users, many=True).data)
 
 
-class UserDeleteView(APIView):
-    """Admin-only: remove any account."""
+class UserManageView(APIView):
+    """Admin-only: view, edit, or remove any account."""
 
     permission_classes = [IsAuthenticated]
 
-    def delete(self, request, pk):
+    # What an admin may change on someone's account (role stays fixed).
+    ADMIN_EDITABLE = {
+        "fullName", "phone", "email", "studentId", "department", "hostelBlock",
+        "cafeteriaName", "businessTag", "deliveryMode", "pickupZone",
+        "latitude", "longitude",
+    }
+
+    def _guard(self, request):
         if request.user.role != User.Role.ADMIN:
             return Response({"detail": "Admins only."}, status=status.HTTP_403_FORBIDDEN)
+        return None
+
+    def get(self, request, pk):
+        denied = self._guard(request)
+        if denied:
+            return denied
+        user = get_object_or_404(User, pk=pk)
+        return Response(UserSerializer(user).data)
+
+    def patch(self, request, pk):
+        denied = self._guard(request)
+        if denied:
+            return denied
+        user = get_object_or_404(User, pk=pk)
+        data = {key: value for key, value in request.data.items() if key in self.ADMIN_EDITABLE}
+        serializer = UserSerializer(user, data=data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        denied = self._guard(request)
+        if denied:
+            return denied
         if str(request.user.id) == str(pk):
             return Response({"detail": "You cannot delete your own account."}, status=status.HTTP_400_BAD_REQUEST)
         user = get_object_or_404(User, pk=pk)
@@ -174,11 +205,22 @@ class UserDeleteView(APIView):
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
+    # Self-service profile fields per role. Everything else (cafeteria name,
+    # business tag, delivery mode, approval, role...) only an admin changes.
+    PROFILE_EDITABLE_BY_ROLE = {
+        "student": {"fullName", "phone", "email", "hostelBlock", "department", "latitude", "longitude"},
+        "vendor": {"phone", "email", "latitude", "longitude"},
+        "delivery": {"phone", "email", "latitude", "longitude"},
+        "admin": {"fullName", "phone", "email", "latitude", "longitude"},
+    }
+
     def get(self, request):
         return Response(UserSerializer(request.user).data)
 
     def patch(self, request):
-        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        allowed = self.PROFILE_EDITABLE_BY_ROLE.get(request.user.role, {"phone", "email"})
+        data = {key: value for key, value in request.data.items() if key in allowed}
+        serializer = UserSerializer(request.user, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
