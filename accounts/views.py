@@ -32,6 +32,7 @@ def _otp_payload(otp):
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    throttle_scope = "auth"
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -46,6 +47,7 @@ class RegisterView(APIView):
 
 class VerifyOtpView(APIView):
     permission_classes = [AllowAny]
+    throttle_scope = "otp"
 
     def post(self, request):
         serializer = VerifyOtpSerializer(data=request.data)
@@ -74,6 +76,7 @@ class VerifyOtpView(APIView):
 
 class ResendOtpView(APIView):
     permission_classes = [AllowAny]
+    throttle_scope = "otp"
 
     def post(self, request):
         serializer = ResendOtpSerializer(data=request.data)
@@ -86,6 +89,7 @@ class ResendOtpView(APIView):
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
+    throttle_scope = "auth"
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data, context={"request": request})

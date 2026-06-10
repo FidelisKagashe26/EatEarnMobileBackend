@@ -136,6 +136,15 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PAGINATION_CLASS": None,
     "DATETIME_FORMAT": "iso-8601",
+    # Only views that declare a `throttle_scope` are limited (ScopedRateThrottle
+    # returns no limit otherwise), so general browsing stays unthrottled.
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.ScopedRateThrottle",
+    ),
+    "DEFAULT_THROTTLE_RATES": {
+        "auth": "60/min",
+        "otp": "20/min",
+    },
 }
 
 SIMPLE_JWT = {

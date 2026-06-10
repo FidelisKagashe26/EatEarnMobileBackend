@@ -49,6 +49,14 @@ class OrderViewSet(viewsets.ModelViewSet):
         )
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
+    # Which statuses each role is allowed to set.
+    ALLOWED_STATUS_BY_ROLE = {
+        "admin": set(dict(Order.Status.choices).keys()),
+        "vendor": {"CONFIRMED", "PREPARING", "READY", "CANCELLED"},
+        "delivery": {"OUT_FOR_DELIVERY", "DELIVERED"},
+        "student": {"CANCELLED"},
+    }
+
     @action(detail=True, methods=["patch"])
     def status(self, request, pk=None):
         order = self.get_object()
@@ -56,6 +64,13 @@ class OrderViewSet(viewsets.ModelViewSet):
         valid = dict(Order.Status.choices)
         if new_status not in valid:
             return Response({"detail": "Invalid status."}, status=400)
+
+        allowed = self.ALLOWED_STATUS_BY_ROLE.get(request.user.role, set())
+        if new_status not in allowed:
+            return Response(
+                {"detail": f"A {request.user.role} cannot set status '{new_status}'."},
+                status=403,
+            )
 
         order.status = new_status
         # When a delivery order goes out, assign the acting delivery agent.

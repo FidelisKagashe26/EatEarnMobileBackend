@@ -69,6 +69,28 @@ PATCH /api/approvals/{id}/decision/  {status}
 
 All list/detail payloads use camelCase keys to match the mobile app's TypeScript types.
 
+## Authorization rules
+
+- **Menu** is publicly readable; only the owning vendor (or an admin) may create,
+  edit, toggle, or delete its items.
+- **Orders** are scoped per role: a student sees only their own orders, a vendor sees
+  their cafeteria's, a delivery agent sees assigned + available delivery jobs, admin
+  sees all.
+- **Order status** changes are role-gated: vendor → CONFIRMED/PREPARING/READY/CANCELLED,
+  delivery → OUT_FOR_DELIVERY/DELIVERED, student → CANCELLED, admin → any.
+- **Order validation**: a cart must be single-vendor and all items must be available.
+- **Throttling**: auth endpoints are rate-limited (`auth` 60/min, `otp` 20/min).
+
+## Tests
+
+```powershell
+python manage.py test
+```
+
+Covers the register → OTP → login flow, role inference, wrong-password rejection,
+catalog + nearby, menu-ownership permissions, order totals/validation, and
+order-status role rules (19 tests).
+
 ## Reset demo data
 
 `python manage.py seed_demo` is idempotent — it clears previously-seeded content and

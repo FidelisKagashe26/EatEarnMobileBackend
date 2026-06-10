@@ -2,6 +2,7 @@ from math import asin, cos, radians, sin, sqrt
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from .models import MenuItem, Vendor
@@ -62,9 +63,31 @@ class MenuItemViewSet(viewsets.ModelViewSet):
             qs = qs.filter(is_available=True)
         return qs
 
+    def _assert_can_edit(self, vendor_id):
+        """Only the vendor that owns the menu (or an admin) may write to it."""
+        user = self.request.user
+        if getattr(user, "role", None) == "admin":
+            return
+        if getattr(user, "role", None) == "vendor" and str(user.vendor_id) == str(vendor_id):
+            return
+        raise PermissionDenied("You can only manage your own cafeteria's menu.")
+
+    def perform_create(self, serializer):
+        self._assert_can_edit(serializer.validated_data["vendor_id"])
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._assert_can_edit(serializer.instance.vendor_id)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._assert_can_edit(instance.vendor_id)
+        instance.delete()
+
     @action(detail=True, methods=["patch"])
     def toggle(self, request, pk=None):
         item = self.get_object()
+        self._assert_can_edit(item.vendor_id)
         item.is_available = not item.is_available
         item.save(update_fields=["is_available"])
         return Response(self.get_serializer(item).data)

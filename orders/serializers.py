@@ -85,9 +85,21 @@ class CreateOrderSerializer(serializers.Serializer):
         if missing:
             raise serializers.ValidationError({"items": f"Unknown menu items: {missing}"})
 
-        # Vendor is derived from the first item (a cart is single-vendor).
-        first_item = menu_map[str(items_data[0]["menuItemId"])]
-        vendor = first_item.vendor
+        # A cart must come from a single vendor.
+        vendor_ids = {menu_map[str(line["menuItemId"])].vendor_id for line in items_data}
+        if len(vendor_ids) > 1:
+            raise serializers.ValidationError({"items": "All items must be from the same vendor."})
+
+        # Reject items that are currently unavailable.
+        unavailable = [
+            menu_map[str(line["menuItemId"])].name
+            for line in items_data
+            if not menu_map[str(line["menuItemId"])].is_available
+        ]
+        if unavailable:
+            raise serializers.ValidationError({"items": f"Currently unavailable: {unavailable}"})
+
+        vendor = menu_map[str(items_data[0]["menuItemId"])].vendor
 
         delivery_type = validated_data["deliveryType"]
         delivery_fee = DELIVERY_FEE if delivery_type == "delivery" else 0
