@@ -11,6 +11,11 @@ from .models import Order
 from .serializers import CreateOrderSerializer, OrderSerializer
 
 
+def order_summary(order):
+    """e.g. '2x Rice and Coconut Beans, 1x Passion Fruit Juice'."""
+    return ", ".join(f"{line.quantity}x {line.name}" for line in order.items.all()) or "items"
+
+
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
@@ -36,16 +41,19 @@ class OrderViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
 
+        summary = order_summary(order)
+        where = order.delivery_location or "vendor counter"
+
         Notification.objects.create(
             user=request.user,
             user_role="student",
-            title=f"Order #{order.id} received",
-            body="The vendor has received your order. You will get updates shortly.",
+            title=f"Order received: {summary}",
+            body=f"{order.vendor.name} got your order ({summary}) for {where}. {order.total} TZS.",
         )
         Notification.objects.create(
             user_role="vendor",
-            title=f"New order #{order.id}",
-            body=f"{order.items.count()} item(s) for {order.total} TZS. Please confirm.",
+            title=f"New order from {order.student.full_name}: {summary}",
+            body=f"{summary} · {order.get_delivery_type_display()} to {where} · {order.total} TZS. Please confirm.",
         )
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
@@ -78,11 +86,13 @@ class OrderViewSet(viewsets.ModelViewSet):
             order.delivery_agent = request.user
         order.save()
 
+        summary = order_summary(order)
+        where = order.delivery_location or "vendor counter"
         Notification.objects.create(
             user=order.student,
             user_role="student",
-            title=f"Order #{order.id} is now {valid[new_status]}",
-            body=f"Your order status changed to {valid[new_status]}.",
+            title=f"{summary} — {valid[new_status]}",
+            body=f"Your order ({summary}) for {where} is now {valid[new_status]}.",
         )
         return Response(OrderSerializer(order).data)
 
@@ -94,4 +104,20 @@ class OrderViewSet(viewsets.ModelViewSet):
         if order.status == "READY":
             order.status = "OUT_FOR_DELIVERY"
         order.save()
+        return Response(OrderSerializer(order).data)
+
+    @action(detail=True, methods=["patch"], url_path="agent-location")
+    def agent_location(self, request, pk=None):
+        """The delivery agent pushes their live location for map tracking."""
+        order = self.get_object()
+        if request.user.role != User.Role.DELIVERY:
+            return Response({"detail": "Only delivery agents can share location."}, status=403)
+        try:
+            order.agent_latitude = float(request.data["latitude"])
+            order.agent_longitude = float(request.data["longitude"])
+        except (KeyError, TypeError, ValueError):
+            return Response({"detail": "latitude and longitude are required."}, status=400)
+        if not order.delivery_agent_id:
+            order.delivery_agent = request.user
+        order.save(update_fields=["agent_latitude", "agent_longitude", "delivery_agent", "updated_at"])
         return Response(OrderSerializer(order).data)

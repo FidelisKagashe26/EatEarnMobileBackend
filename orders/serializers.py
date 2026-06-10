@@ -23,7 +23,10 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
     studentId = serializers.CharField(source="student_id", read_only=True)
+    studentName = serializers.CharField(source="student.full_name", read_only=True)
+    studentPhone = serializers.CharField(source="student.phone", read_only=True)
     vendorId = serializers.CharField(source="vendor_id", read_only=True)
+    vendorName = serializers.CharField(source="vendor.name", read_only=True)
     deliveryAgentId = serializers.SerializerMethodField()
     items = OrderItemSerializer(many=True, read_only=True)
     deliveryFee = serializers.IntegerField(source="delivery_fee", read_only=True)
@@ -31,13 +34,19 @@ class OrderSerializer(serializers.ModelSerializer):
     deliveryType = serializers.CharField(source="delivery_type", read_only=True)
     placedAt = serializers.DateTimeField(source="placed_at", read_only=True)
     deliveryLocation = serializers.CharField(source="delivery_location", read_only=True)
+    agentLatitude = serializers.FloatField(source="agent_latitude", read_only=True)
+    agentLongitude = serializers.FloatField(source="agent_longitude", read_only=True)
 
     class Meta:
         model = Order
         fields = [
             "id",
+            "reference",
             "studentId",
+            "studentName",
+            "studentPhone",
             "vendorId",
+            "vendorName",
             "deliveryAgentId",
             "items",
             "subtotal",
@@ -50,6 +59,8 @@ class OrderSerializer(serializers.ModelSerializer):
             "deliveryLocation",
             "latitude",
             "longitude",
+            "agentLatitude",
+            "agentLongitude",
         ]
 
     def get_deliveryAgentId(self, obj):

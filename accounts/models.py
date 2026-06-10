@@ -77,6 +77,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     longitude = models.FloatField(null=True, blank=True)
 
     is_verified = models.BooleanField(default=False)  # OTP confirmed
+    # Vendors & delivery agents need admin approval before they can operate.
+    # Customers (students) and admins are approved automatically.
+    is_approved = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)

@@ -19,6 +19,7 @@ class UserSerializer(serializers.ModelSerializer):
     deliveryMode = serializers.CharField(source="delivery_mode", required=False, allow_blank=True)
     pickupZone = serializers.CharField(source="pickup_zone", required=False, allow_blank=True)
     isVerified = serializers.BooleanField(source="is_verified", read_only=True)
+    isApproved = serializers.BooleanField(source="is_approved", read_only=True)
 
     class Meta:
         model = User
@@ -39,6 +40,7 @@ class UserSerializer(serializers.ModelSerializer):
             "latitude",
             "longitude",
             "isVerified",
+            "isApproved",
         ]
 
     def get_vendorId(self, obj):
@@ -76,6 +78,10 @@ class RegisterSerializer(serializers.Serializer):
         # A password is optional for the demo; default keeps quick-login working.
         password = validated_data.get("password") or "123456"
 
+        role = validated_data["role"]
+        # Vendors & delivery agents must be approved by an admin before operating.
+        needs_approval = role in (User.Role.VENDOR, User.Role.DELIVERY)
+
         user = User.objects.create_user(
             email=validated_data["email"],
             password=password,
@@ -93,6 +99,7 @@ class RegisterSerializer(serializers.Serializer):
             latitude=validated_data.get("latitude"),
             longitude=validated_data.get("longitude"),
             is_verified=False,
+            is_approved=not needs_approval,
         )
         return user
 

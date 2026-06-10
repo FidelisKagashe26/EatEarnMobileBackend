@@ -16,6 +16,23 @@ python manage.py runserver 0.0.0.0:8000
 
 Optional config — copy `.env.example` to `.env` and edit. All values have dev defaults.
 
+## Demo login credentials
+
+Created by `python manage.py seed_demo`. **All accounts use the password `123456`.**
+
+| Role     | Email                  | Password | Use it for |
+|----------|------------------------|----------|------------|
+| Student  | `student@eatearn.app`  | `123456` | Customer app: browse, order, track |
+| Vendor   | `vendor@eatearn.app`   | `123456` | Vendor dashboard, menu, orders |
+| Delivery | `delivery@eatearn.app` | `123456` | Delivery tasks & history |
+| Admin    | `admin@eatearn.app`    | `123456` | Admin dashboard + Django admin (`/admin/`) |
+
+- **Live API:** https://eatearn.pythonanywhere.com  (health: `/api/health/`)
+- **Django admin:** `/admin/` — sign in with the **admin** account above.
+- Login is by **email + password only**; the app routes you by the role stored on the account.
+- New customers sign up in-app (no role picker); registration sends an OTP. In dev,
+  the OTP is returned in the API response (`devOtp`) and printed to the server console.
+
 ## Apps
 
 | App | Models | Responsibility |

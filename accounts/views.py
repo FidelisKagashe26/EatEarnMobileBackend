@@ -6,6 +6,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from approvals.models import ApprovalRequest
+from notifications.models import Notification
+
 from .models import EmailOTP, User
 from .serializers import (
     LoginSerializer,
@@ -38,6 +41,26 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+
+        # Vendors & delivery agents need admin approval — queue a request.
+        if user.role in (User.Role.VENDOR, User.Role.DELIVERY):
+            if user.role == User.Role.VENDOR:
+                details = f"Cafeteria: {user.cafeteria_name or 'N/A'} · Tag: {user.business_tag or 'N/A'} · {user.phone}"
+            else:
+                details = f"Delivery mode: {user.delivery_mode or 'N/A'} · Zone: {user.pickup_zone or 'N/A'} · {user.phone}"
+            ApprovalRequest.objects.create(
+                type=user.role,
+                applicant=user,
+                applicant_name=user.full_name,
+                details=details,
+                status=ApprovalRequest.Status.PENDING,
+            )
+            Notification.objects.create(
+                user_role="admin",
+                title=f"New {user.role} application",
+                body=f"{user.full_name} is waiting for approval.",
+            )
+
         otp = EmailOTP.issue(user, purpose="register")
         return Response(
             {"user": UserSerializer(user).data, **_otp_payload(otp)},
@@ -131,6 +154,21 @@ class UsersListView(APIView):
             return Response({"detail": "Admins only."}, status=status.HTTP_403_FORBIDDEN)
         users = User.objects.all()
         return Response(UserSerializer(users, many=True).data)
+
+
+class UserDeleteView(APIView):
+    """Admin-only: remove any account."""
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        if request.user.role != User.Role.ADMIN:
+            return Response({"detail": "Admins only."}, status=status.HTTP_403_FORBIDDEN)
+        if str(request.user.id) == str(pk):
+            return Response({"detail": "You cannot delete your own account."}, status=status.HTTP_400_BAD_REQUEST)
+        user = get_object_or_404(User, pk=pk)
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class MeView(APIView):

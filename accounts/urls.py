@@ -7,6 +7,7 @@ from .views import (
     MeView,
     RegisterView,
     ResendOtpView,
+    UserDeleteView,
     UsersListView,
     VerifyOtpView,
 )
@@ -20,4 +21,5 @@ urlpatterns = [
     path("token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
     path("me/", MeView.as_view(), name="me"),
     path("users/", UsersListView.as_view(), name="users"),
+    path("users/<int:pk>/", UserDeleteView.as_view(), name="user-delete"),
 ]
