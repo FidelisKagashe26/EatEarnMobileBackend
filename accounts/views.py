@@ -40,6 +40,16 @@ class RegisterView(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        # Public sign-up is customers & delivery agents only. Vendors (and
+        # admins) are registered by an admin from the dashboard.
+        requested_role = serializer.validated_data.get("role")
+        if requested_role not in (User.Role.STUDENT, User.Role.DELIVERY):
+            return Response(
+                {"detail": "Only customers and delivery agents can self-register. Vendors are registered by the admin."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         user = serializer.save()
 
         # Vendors & delivery agents need admin approval — queue a request.
@@ -154,6 +164,37 @@ class UsersListView(APIView):
             return Response({"detail": "Admins only."}, status=status.HTTP_403_FORBIDDEN)
         users = User.objects.all()
         return Response(UserSerializer(users, many=True).data)
+
+    def post(self, request):
+        """Admin registers any account (any role) — active immediately, no OTP.
+
+        Vendors registered here get their cafeteria created (or linked) so the
+        shop shows up in the app right away.
+        """
+        if request.user.role != User.Role.ADMIN:
+            return Response({"detail": "Admins only."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        # Admin-created accounts skip OTP and approval.
+        user.is_verified = True
+        user.is_approved = True
+
+        if user.role == User.Role.VENDOR and not user.vendor_id:
+            cafeteria_name = (request.data.get("cafeteriaName") or "").strip()
+            if cafeteria_name:
+                from catalog.models import Vendor
+
+                vendor, _created = Vendor.objects.get_or_create(
+                    name=cafeteria_name,
+                    defaults={"location": (request.data.get("vendorLocation") or "").strip()},
+                )
+                user.vendor = vendor
+        user.save()
+
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
 class UserManageView(APIView):
