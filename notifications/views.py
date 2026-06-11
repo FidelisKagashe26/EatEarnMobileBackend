@@ -8,7 +8,9 @@ from .models import Notification
 from .serializers import NotificationSerializer
 
 
-class NotificationViewSet(viewsets.ModelViewSet):
+# Read-only: notifications are created by the system (orders, approvals…),
+# never by API clients — otherwise anyone could forge alerts for other roles.
+class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
 

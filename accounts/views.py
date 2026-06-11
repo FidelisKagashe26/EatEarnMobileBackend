@@ -25,6 +25,11 @@ def tokens_for(user):
     return {"access": str(refresh.access_token), "refresh": str(refresh)}
 
 
+def is_admin(user):
+    """Admins by role, plus any Django superuser (e.g. created via command)."""
+    return getattr(user, "role", None) == User.Role.ADMIN or getattr(user, "is_superuser", False)
+
+
 def _otp_payload(otp):
     """Email the OTP to the user. Falls back to the dev code only when email
     delivery is unavailable AND OTP_DEBUG_RETURN is enabled (local dev)."""
@@ -172,7 +177,7 @@ class UsersListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if request.user.role != User.Role.ADMIN:
+        if not is_admin(request.user):
             return Response({"detail": "Admins only."}, status=status.HTTP_403_FORBIDDEN)
         users = User.objects.all()
         return Response(UserSerializer(users, many=True).data)
@@ -183,7 +188,7 @@ class UsersListView(APIView):
         Vendors registered here get their cafeteria created (or linked) so the
         shop shows up in the app right away.
         """
-        if request.user.role != User.Role.ADMIN:
+        if not is_admin(request.user):
             return Response({"detail": "Admins only."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = RegisterSerializer(data=request.data)
@@ -222,7 +227,7 @@ class UserManageView(APIView):
     }
 
     def _guard(self, request):
-        if request.user.role != User.Role.ADMIN:
+        if not is_admin(request.user):
             return Response({"detail": "Admins only."}, status=status.HTTP_403_FORBIDDEN)
         return None
 

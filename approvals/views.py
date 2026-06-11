@@ -1,5 +1,6 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from notifications.models import Notification
@@ -8,12 +9,27 @@ from .models import ApprovalRequest
 from .serializers import ApprovalRequestSerializer
 
 
+def _is_admin(user):
+    return getattr(user, "role", None) == "admin" or getattr(user, "is_superuser", False)
+
+
 class ApprovalRequestViewSet(viewsets.ModelViewSet):
     queryset = ApprovalRequest.objects.select_related("applicant").all()
     serializer_class = ApprovalRequestSerializer
+    # Reads are open to signed-in staff screens; writes happen only through
+    # the admin-guarded `decision` action below.
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def partial_update(self, request, *args, **kwargs):
+        raise PermissionDenied("Use the decision endpoint.")
 
     @action(detail=True, methods=["patch"])
     def decision(self, request, pk=None):
+        # Only admins decide applications — an applicant must never be able
+        # to approve themselves through the API.
+        if not _is_admin(request.user):
+            raise PermissionDenied("Only admins can approve or reject applications.")
+
         approval = self.get_object()
         new_status = request.data.get("status")
         if new_status not in dict(ApprovalRequest.Status.choices):

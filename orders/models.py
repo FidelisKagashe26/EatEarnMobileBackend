@@ -58,6 +58,9 @@ class Order(models.Model):
     agent_latitude = models.FloatField(null=True, blank=True)
     agent_longitude = models.FloatField(null=True, blank=True)
 
+    # Customer's rating (1-5) after delivery; feeds the vendor's average.
+    rating = models.PositiveSmallIntegerField(null=True, blank=True)
+
     placed_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

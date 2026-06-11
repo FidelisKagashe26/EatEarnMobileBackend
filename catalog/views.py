@@ -29,12 +29,12 @@ class VendorViewSet(viewsets.ModelViewSet):
 
     # A vendor manager may self-update only these fields of their own
     # cafeteria; everything else changes through the admin.
-    MANAGER_EDITABLE = {"location", "imageUrl"}
+    MANAGER_EDITABLE = {"location", "imageUrl", "isOpen", "etaMinutes"}
 
     def update(self, request, *args, **kwargs):
         vendor = self.get_object()
         user = request.user
-        if getattr(user, "role", None) == "admin":
+        if getattr(user, "role", None) == "admin" or getattr(user, "is_superuser", False):
             data = request.data
         elif getattr(user, "role", None) == "vendor" and str(user.vendor_id) == str(vendor.pk):
             data = {key: value for key, value in request.data.items() if key in self.MANAGER_EDITABLE}
@@ -93,7 +93,7 @@ class MenuItemViewSet(viewsets.ModelViewSet):
     def _assert_can_edit(self, vendor_id):
         """Only the vendor that owns the menu (or an admin) may write to it."""
         user = self.request.user
-        if getattr(user, "role", None) == "admin":
+        if getattr(user, "role", None) == "admin" or getattr(user, "is_superuser", False):
             return
         if getattr(user, "role", None) == "vendor" and str(user.vendor_id) == str(vendor_id):
             return
@@ -127,7 +127,7 @@ class MenuItemViewSet(viewsets.ModelViewSet):
     )
     def upload_image(self, request):
         """Vendors upload a food photo; returns the public URL to store on the item."""
-        if getattr(request.user, "role", None) not in ("vendor", "admin"):
+        if getattr(request.user, "role", None) not in ("vendor", "admin") and not request.user.is_superuser:
             raise PermissionDenied("Only vendors can upload food photos.")
 
         file = request.FILES.get("image")

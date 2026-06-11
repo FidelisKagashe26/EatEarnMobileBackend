@@ -61,6 +61,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "longitude",
             "agentLatitude",
             "agentLongitude",
+            "rating",
         ]
 
     def get_deliveryAgentId(self, obj):

@@ -1,4 +1,4 @@
-from django.db.models import Q
+from django.db.models import Avg, Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -16,14 +16,35 @@ def order_summary(order):
     return ", ".join(f"{line.quantity}x {line.name}" for line in order.items.all()) or "items"
 
 
+def effective_role(user):
+    """Superusers act as full admins everywhere, whatever their stored role."""
+    if getattr(user, "is_superuser", False):
+        return User.Role.ADMIN
+    return user.role
+
+
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
+
+    # Orders change only through the purpose-built endpoints below
+    # (status / accept / agent-location / rate) — never via raw PATCH/PUT,
+    # which would bypass the role rules (e.g. editing totals or status).
+    def update(self, request, *args, **kwargs):
+        return Response({"detail": "Use the status, accept, or rate endpoints."}, status=405)
+
+    def partial_update(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        return Response({"detail": "Orders cannot be deleted."}, status=405)
 
     def get_queryset(self):
         user = self.request.user
         base = Order.objects.select_related("vendor", "student", "delivery_agent").prefetch_related("items")
 
+        if effective_role(user) == User.Role.ADMIN:
+            return base
         if user.role == User.Role.STUDENT:
             return base.filter(student=user)
         if user.role == User.Role.VENDOR:
@@ -73,7 +94,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         if new_status not in valid:
             return Response({"detail": "Invalid status."}, status=400)
 
-        allowed = self.ALLOWED_STATUS_BY_ROLE.get(request.user.role, set())
+        allowed = self.ALLOWED_STATUS_BY_ROLE.get(effective_role(request.user), set())
         if new_status not in allowed:
             return Response(
                 {"detail": f"A {request.user.role} cannot set status '{new_status}'."},
@@ -99,11 +120,40 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["patch"])
     def accept(self, request, pk=None):
         """A delivery agent claims an available delivery order."""
+        if effective_role(request.user) not in (User.Role.DELIVERY, User.Role.ADMIN):
+            return Response({"detail": "Only delivery agents can accept orders."}, status=403)
         order = self.get_object()
         order.delivery_agent = request.user
         if order.status == "READY":
             order.status = "OUT_FOR_DELIVERY"
         order.save()
+        return Response(OrderSerializer(order).data)
+
+    @action(detail=True, methods=["patch"])
+    def rate(self, request, pk=None):
+        """The customer rates a delivered order; vendor average updates."""
+        order = self.get_object()
+        if order.student_id != request.user.id:
+            return Response({"detail": "You can only rate your own order."}, status=403)
+        if order.status != "DELIVERED":
+            return Response({"detail": "You can rate once the order is delivered."}, status=400)
+        try:
+            value = int(request.data.get("rating"))
+        except (TypeError, ValueError):
+            return Response({"detail": "rating must be a number from 1 to 5."}, status=400)
+        if not 1 <= value <= 5:
+            return Response({"detail": "rating must be from 1 to 5."}, status=400)
+
+        order.rating = value
+        order.save(update_fields=["rating"])
+
+        average = Order.objects.filter(vendor=order.vendor, rating__isnull=False).aggregate(
+            avg=Avg("rating")
+        )["avg"]
+        if average:
+            order.vendor.rating = round(average, 1)
+            order.vendor.save(update_fields=["rating"])
+
         return Response(OrderSerializer(order).data)
 
     @action(detail=True, methods=["patch"], url_path="agent-location")
