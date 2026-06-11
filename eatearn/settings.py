@@ -161,8 +161,27 @@ SIMPLE_JWT = {
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
-# OTP behaviour (demo). In production wire this to an SMS/email provider.
+# ---------------------------------------------------------------------------
+# Email — real OTP delivery (Gmail SMTP via app password).
+# Configure EMAIL_HOST_USER / EMAIL_HOST_PASSWORD in .env; without them the
+# console backend is used (emails print to the server log).
+# ---------------------------------------------------------------------------
+EMAIL_HOST = env("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(env("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", "").replace(" ", "")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "no-reply@eatearn.app")
+EMAIL_TIMEOUT = 15
+EMAIL_BACKEND = (
+    "django.core.mail.backends.smtp.EmailBackend"
+    if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD
+    else "django.core.mail.backends.console.EmailBackend"
+)
+
+# OTP behaviour.
 OTP_TTL_MINUTES = int(env("OTP_TTL_MINUTES", "10"))
-# When True, the generated OTP is returned in the API response + printed to the
-# console so the flow is testable without a real SMS gateway.
+# Dev fallback only: when True AND the email could not be sent, the OTP is
+# returned in the API response so local testing still works. Set to False in
+# production once real email is configured.
 OTP_DEBUG_RETURN = env_bool("OTP_DEBUG_RETURN", True)

@@ -9,6 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from approvals.models import ApprovalRequest
 from notifications.models import Notification
 
+from .emails import send_otp_email
 from .models import EmailOTP, User
 from .serializers import (
     LoginSerializer,
@@ -25,11 +26,22 @@ def tokens_for(user):
 
 
 def _otp_payload(otp):
-    """Expose the code in dev so the OTP screen is testable without SMS."""
-    data = {"message": f"An OTP was sent to your email/phone. (expires in {settings.OTP_TTL_MINUTES} min)"}
-    if settings.OTP_DEBUG_RETURN:
+    """Email the OTP to the user. Falls back to the dev code only when email
+    delivery is unavailable AND OTP_DEBUG_RETURN is enabled (local dev)."""
+    sent = False
+    if settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD:
+        try:
+            send_otp_email(otp.user, otp.code)
+            sent = True
+        except Exception as exc:  # SMTP hiccup — don't break registration
+            print(f"[EatEarn OTP] email send failed for {otp.user.email}: {exc}")
+
+    data = {
+        "message": f"A verification code was sent to {otp.user.email}. It expires in {settings.OTP_TTL_MINUTES} minutes."
+    }
+    if not sent and settings.OTP_DEBUG_RETURN:
         data["devOtp"] = otp.code
-    print(f"[EatEarn OTP] {otp.user.email} -> {otp.code}")
+        print(f"[EatEarn OTP] {otp.user.email} -> {otp.code}")
     return data
 
 
