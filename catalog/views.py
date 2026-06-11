@@ -29,7 +29,7 @@ class VendorViewSet(viewsets.ModelViewSet):
 
     # A vendor manager may self-update only these fields of their own
     # cafeteria; everything else changes through the admin.
-    MANAGER_EDITABLE = {"location"}
+    MANAGER_EDITABLE = {"location", "imageUrl"}
 
     def update(self, request, *args, **kwargs):
         vendor = self.get_object()
