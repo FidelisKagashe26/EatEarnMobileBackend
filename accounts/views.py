@@ -208,6 +208,18 @@ class UsersListView(APIView):
                     name=cafeteria_name,
                     defaults={"location": (request.data.get("vendorLocation") or "").strip()},
                 )
+                # Money split for this cafeteria, chosen by the admin now:
+                # platform commission % and the delivery agents' share of it.
+                def _pct(key, current):
+                    try:
+                        value = int(request.data.get(key))
+                    except (TypeError, ValueError):
+                        return current
+                    return min(100, max(0, value))
+
+                vendor.commission_percent = _pct("commissionPercent", vendor.commission_percent)
+                vendor.delivery_share_percent = _pct("deliverySharePercent", vendor.delivery_share_percent)
+                vendor.save()
                 user.vendor = vendor
         user.save()
 

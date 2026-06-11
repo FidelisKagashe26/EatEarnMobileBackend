@@ -61,6 +61,13 @@ class Order(models.Model):
     # Customer's rating (1-5) after delivery; feeds the vendor's average.
     rating = models.PositiveSmallIntegerField(null=True, blank=True)
 
+    # Money split, frozen when the order reaches DELIVERED (so later changes
+    # to the vendor's percentages don't rewrite history):
+    # commission_amount: what the vendor owes the platform for this order.
+    # delivery_earning: what the platform owes the delivery agent for it.
+    commission_amount = models.PositiveIntegerField(null=True, blank=True)
+    delivery_earning = models.PositiveIntegerField(null=True, blank=True)
+
     placed_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -81,6 +88,42 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Order {self.reference or self.pk} - {self.student.email} ({self.status})"
+
+
+class Payment(models.Model):
+    """A recorded cash settlement between the platform (admin) and a partner.
+
+    - DELIVERY_PAYOUT: admin paid a delivery agent their accumulated earnings.
+    - VENDOR_SETTLEMENT: a vendor paid the platform its accumulated commission.
+    """
+
+    class Kind(models.TextChoices):
+        DELIVERY_PAYOUT = "delivery_payout", "Delivery payout"
+        VENDOR_SETTLEMENT = "vendor_settlement", "Vendor settlement"
+
+    kind = models.CharField(max_length=30, choices=Kind.choices)
+    agent = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.CASCADE, related_name="payouts",
+    )
+    vendor = models.ForeignKey(
+        Vendor, null=True, blank=True,
+        on_delete=models.CASCADE, related_name="settlements",
+    )
+    amount = models.PositiveIntegerField()
+    note = models.CharField(max_length=200, blank=True)
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        who = self.agent or self.vendor
+        return f"{self.get_kind_display()} - {who} - {self.amount}"
 
 
 class OrderItem(models.Model):

@@ -36,6 +36,8 @@ class OrderSerializer(serializers.ModelSerializer):
     deliveryLocation = serializers.CharField(source="delivery_location", read_only=True)
     agentLatitude = serializers.FloatField(source="agent_latitude", read_only=True)
     agentLongitude = serializers.FloatField(source="agent_longitude", read_only=True)
+    commissionAmount = serializers.IntegerField(source="commission_amount", read_only=True)
+    deliveryEarning = serializers.IntegerField(source="delivery_earning", read_only=True)
 
     class Meta:
         model = Order
@@ -62,6 +64,8 @@ class OrderSerializer(serializers.ModelSerializer):
             "agentLatitude",
             "agentLongitude",
             "rating",
+            "commissionAmount",
+            "deliveryEarning",
         ]
 
     def get_deliveryAgentId(self, obj):

@@ -16,6 +16,12 @@ class Vendor(models.Model):
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
 
+    # Money split, set by the admin when registering the vendor:
+    # - commission_percent: % of each order's subtotal the platform takes.
+    # - delivery_share_percent: % OF THAT COMMISSION paid to the delivery agent.
+    commission_percent = models.PositiveSmallIntegerField(default=10)
+    delivery_share_percent = models.PositiveSmallIntegerField(default=40)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

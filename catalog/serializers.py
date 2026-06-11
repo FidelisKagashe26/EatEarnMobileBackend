@@ -9,6 +9,8 @@ class VendorSerializer(serializers.ModelSerializer):
     isOpen = serializers.BooleanField(source="is_open", required=False)
     imageUrl = serializers.CharField(source="image_url", required=False, allow_blank=True)
     rating = serializers.FloatField(required=False)
+    commissionPercent = serializers.IntegerField(source="commission_percent", required=False)
+    deliverySharePercent = serializers.IntegerField(source="delivery_share_percent", required=False)
 
     class Meta:
         model = Vendor
@@ -23,6 +25,8 @@ class VendorSerializer(serializers.ModelSerializer):
             "imageUrl",
             "latitude",
             "longitude",
+            "commissionPercent",
+            "deliverySharePercent",
         ]
 
 

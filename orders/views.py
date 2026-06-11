@@ -105,6 +105,19 @@ class OrderViewSet(viewsets.ModelViewSet):
         # When a delivery order goes out, assign the acting delivery agent.
         if new_status == "OUT_FOR_DELIVERY" and request.user.role == "delivery" and not order.delivery_agent_id:
             order.delivery_agent = request.user
+
+        # Freeze the money split the moment the order completes: the vendor
+        # owes the platform its commission, and the platform owes the agent
+        # their share of that commission (per the percentages set by admin).
+        if new_status == "DELIVERED" and order.commission_amount is None:
+            pct = order.vendor.commission_percent or 0
+            share = order.vendor.delivery_share_percent or 0
+            order.commission_amount = round(order.subtotal * pct / 100)
+            order.delivery_earning = (
+                round(order.commission_amount * share / 100)
+                if order.delivery_type == "delivery" and order.delivery_agent_id
+                else 0
+            )
         order.save()
 
         summary = order_summary(order)
